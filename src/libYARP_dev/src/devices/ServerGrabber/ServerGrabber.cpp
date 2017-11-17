@@ -210,6 +210,7 @@ yarp::dev::impl::ServerGrabberResponder::ServerGrabberResponder(bool _left) :
 {}
 
 yarp::dev::impl::ServerGrabberResponder::~ServerGrabberResponder(){}
+
 bool yarp::dev::impl::ServerGrabberResponder::configure(yarp::dev::ServerGrabber* _server)
 {
     if(_server)
@@ -221,7 +222,10 @@ bool yarp::dev::impl::ServerGrabberResponder::configure(yarp::dev::ServerGrabber
     return false;
 }
 bool yarp::dev::impl::ServerGrabberResponder::respond(const os::Bottle &command, os::Bottle &reply){
-    return server->respond(command,reply,left,false);
+    if(server)
+        return server->respond(command,reply,left,false);
+    else
+        return false;
 }
 
 // **********ServerGrabber**********
@@ -262,7 +266,6 @@ ServerGrabber::ServerGrabber():RateThread(DEFAULT_THREAD_PERIOD), period(DEFAULT
     isSubdeviceOwned=false;
     count = 0;
     count2 = 0;
-
 }
 
 ServerGrabber::~ServerGrabber()
@@ -441,6 +444,7 @@ bool ServerGrabber::fromConfig(yarp::os::Searchable &config)
         responder2 = new yarp::dev::impl::ServerGrabberResponder(false);
         if(!responder2->configure(this))
             return false;
+
         rpcPort_Name  = rootName + "/left/rpc";
         rpcPort2_Name  = rootName + "/right/rpc";
         if(param.split)
@@ -464,8 +468,11 @@ bool ServerGrabber::fromConfig(yarp::os::Searchable &config)
     }
     else
     {
-        if(param.splitterMode)
+        if(param.split)
         {
+            responder2 = new yarp::dev::impl::ServerGrabberResponder(false);
+            if(!responder2->configure(this))
+                return false;
             pImg_Name = rootName + "/left";
             pImg2_Name = rootName + "/right";
         }
@@ -498,11 +505,10 @@ bool ServerGrabber::initialize_YARP(yarp::os::Searchable &params)
         yError() << "ServerGrabber: unable to open rpc Port" << rpcPort_Name.c_str();
         bRet = false;
     }
-
     rpcPort.setReader(*responder);
+
     pImg.promiseType(Type::byName("yarp/image"));
     pImg.setWriteOnly();
-
     if(!pImg.open(pImg_Name.c_str()))
     {
         yError() << "ServerGrabber: unable to open image streaming Port" << pImg_Name.c_str();
@@ -519,17 +525,17 @@ bool ServerGrabber::initialize_YARP(yarp::os::Searchable &params)
         }
         rpcPort2.setReader(*responder2);
     }
-    if((param.twoCameras && param.split) || param.splitterMode)
+    if(param.split)
     {
         pImg2.promiseType(Type::byName("yarp/image"));
         pImg2.setWriteOnly();
+
         if(!pImg2.open(pImg2_Name.c_str()))
         {
             yError() << "ServerGrabber: unable to open image streaming Port" << pImg2_Name.c_str();
             bRet = false;
         }
-        if(!param.splitterMode)
-            pImg2.setReader(*responder2);
+        pImg2.setReader(*responder2);
     }
 
     return bRet;
